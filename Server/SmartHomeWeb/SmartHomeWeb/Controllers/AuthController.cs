@@ -24,30 +24,54 @@ namespace SmartHomeWeb.Controllers
             _mysql = mysql;
         }
 
-        [HttpPost("register")]
-        public async Task<IActionResult> Register([FromBody] User model)
+        [HttpGet("Login")]
+        public IActionResult Login()
         {
-            if (await _mysql.Users.AnyAsync(u => u.Email == model.Email))
-                return BadRequest("Email already exists");
-
-            var salt = PasswordManager.GenerateSalt();
-            var hash = PasswordManager.HashPassword(model.Password, salt);
-            model.Password = PasswordManager.CombineSaltHash(hash, salt);
-
-            _mysql.Users.Add(model);
-            await _mysql.SaveChangesAsync();
-
-            return Ok("User registered");
+            return View();
         }
 
-        [HttpPost("login")]
-        public async Task<IActionResult> Login([FromBody] User model, [FromQuery] bool useCookie = false)
+        [HttpGet("Register")]
+        public IActionResult Register()
         {
-            var user = await _mysql.Users.FirstOrDefaultAsync(u => u.Email == model.Email);
+            return View();
+        }
+
+        [HttpPost("Register")]
+        public async Task<IActionResult> Register(string email, string password, string repeatpassword, string fname, string lname)
+        {
+            if (await _mysql.Users.AnyAsync(u => u.Email == email))
+                return BadRequest("Email already exists");
+            if(password != repeatpassword)
+                return BadRequest("Passwords not matching");
+
+            var salt = PasswordManager.GenerateSalt();
+            var hash = PasswordManager.HashPassword(password, salt);
+            password = PasswordManager.CombineSaltHash(hash, salt);
+
+            User u = new()
+            {
+                Email = email,
+                Password = password,
+                FName = fname,
+                LName = lname
+            };
+
+            
+
+            _mysql.Users.Add(u);
+            await _mysql.SaveChangesAsync();
+
+            return RedirectToAction("Login");
+        }
+
+        [HttpPost("Login")]
+        public async Task<IActionResult> Login(string email, string password, bool useCookie = false)
+        {
+            var user = await _mysql.Users.FirstOrDefaultAsync(u => u.Email == email);
             if (user is null) 
                 return Unauthorized("Invalid credentials");
 
-            if (!PasswordManager.VerifyPassword(model.Password, user.Password))
+            if (!PasswordManager.VerifyPassword(password, user.Password))
                 return Unauthorized("Invalid credentials");
 
             if (useCookie)
@@ -69,7 +93,7 @@ namespace SmartHomeWeb.Controllers
 
                 await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(claimsIdentity), authProperties);
 
-                return Ok("Logged in with cookie");
+                return RedirectToAction("Index", "Home");
             }
             else
             {
@@ -97,11 +121,11 @@ namespace SmartHomeWeb.Controllers
             }
         }
 
-        [HttpPost("logout")]
+        [HttpGet("Logout")]
         public async Task<IActionResult> Logout()
         {
             await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-            return Ok("Logged out");
+            return RedirectToAction("Login");
         }
     }
 }
